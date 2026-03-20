@@ -1698,9 +1698,34 @@ export class OpenAIResponsesProvider implements ApiProvider {
     transportLabel: 'http' | 'sse' | 'websocket',
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     let usage: ResponseUsage | undefined;
+    const emittedFunctionCallIds = new Set<string>();
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
     const thinkingOutputState: ResponseThinkingOutputState = {};
+
+    const emitFunctionCallPart = (
+      item: ResponseFunctionToolCall,
+    ): vscode.LanguageModelToolCallPart | undefined => {
+      const callId =
+        typeof item.call_id === 'string' && item.call_id
+          ? item.call_id
+          : undefined;
+      const name =
+        typeof item.name === 'string' && item.name ? item.name : undefined;
+
+      if (!callId || !name || emittedFunctionCallIds.has(callId)) {
+        return undefined;
+      }
+
+      emittedFunctionCallIds.add(callId);
+      const argumentsJson =
+        typeof item.arguments === 'string' ? item.arguments : '{}';
+      return new vscode.LanguageModelToolCallPart(
+        callId,
+        name,
+        this.parseArguments(argumentsJson),
+      );
+    };
 
     for await (const event of stream) {
       if (token.isCancellationRequested) {
@@ -1765,11 +1790,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
         case 'response.output_item.done': {
           const item = event.item;
           if (item.type === 'function_call') {
-            yield new vscode.LanguageModelToolCallPart(
-              item.call_id,
-              item.name,
-              this.parseArguments(item.arguments),
-            );
+            const part = emitFunctionCallPart(item);
+            if (part) {
+              yield part;
+            }
           }
           break;
         }
@@ -1778,6 +1802,15 @@ export class OpenAIResponsesProvider implements ApiProvider {
           const response = event.response;
           usage = response.usage ?? undefined;
 
+          for (const item of response.output) {
+            if (item.type !== 'function_call') {
+              continue;
+            }
+            const part = emitFunctionCallPart(item);
+            if (part) {
+              yield part;
+            }
+          }
           const reasonings = response.output.filter(
             (v): v is ResponseReasoningItem => v.type === 'reasoning',
           );
