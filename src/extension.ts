@@ -1,13 +1,13 @@
-import * as vscode from 'vscode';
-import { ConfigStore } from './config-store';
+import * as vscode from "vscode";
+import { ConfigStore } from "./config-store";
 import {
   SecretStore,
   migrateApiKeyToAuth,
   migrateProviderTypes,
   migrateApiKeyStorage,
   cleanupUnusedSecrets,
-} from './secret';
-import { UnifyChatService } from './service';
+} from "./secret";
+import { UnifyChatService } from "./service";
 import {
   addProvider,
   addProviderFromConfig,
@@ -17,24 +17,26 @@ import {
   manageBalances,
   manageProviders,
   removeProvider,
-} from './ui';
-import { officialModelsManager } from './official-models-manager';
-import { registerUriHandler, type EventedUriHandler } from './uri-handler';
-import { t } from './i18n';
-import { AuthManager } from './auth';
-import { balanceManager } from './balance';
-import { registerBalanceStatusBar } from './ui/balance-status-bar';
-import { mainInstance } from './main-instance';
+  manageAcpAgents,
+} from "./ui";
+import { officialModelsManager } from "./official-models-manager";
+import { registerUriHandler, type EventedUriHandler } from "./uri-handler";
+import { t } from "./i18n";
+import { AuthManager } from "./auth";
+import { balanceManager } from "./balance";
+import { registerBalanceStatusBar } from "./ui/balance-status-bar";
+import { mainInstance } from "./main-instance";
 import {
   ensureMainInstanceCompatibility,
   showMainInstanceCompatibilityWarning,
-} from './main-instance/compatibility';
-import { registerMainInstanceHandlers } from './main-instance/register-handlers';
-import { authLog } from './logger';
-import { webSocketSessionManager } from './client/websocket-session-manager';
+} from "./main-instance/compatibility";
+import { registerMainInstanceHandlers } from "./main-instance/register-handlers";
+import { authLog } from "./logger";
+import { webSocketSessionManager } from "./client/websocket-session-manager";
+import { AcpConfigStore, AcpArgvManager, registerAcpAgents } from "./acp";
 
-const VENDOR_ID = 'unify-chat-provider';
-const CONFIG_NAMESPACE = 'unifyChatProvider';
+const VENDOR_ID = "unify-chat-provider";
+const CONFIG_NAMESPACE = "unifyChatProvider";
 
 /**
  * Extension activation
@@ -63,15 +65,15 @@ export async function activate(
   const runLeaderStartupMigrations = async (): Promise<void> => {
     if (!mainInstance.isLeader()) {
       authLog.verbose(
-        'main-instance',
-        'Skipping leader startup migrations because this instance is not leader',
+        "main-instance",
+        "Skipping leader startup migrations because this instance is not leader",
       );
       return;
     }
-    authLog.verbose('main-instance', 'Running leader startup migrations');
+    authLog.verbose("main-instance", "Running leader startup migrations");
     await migrateProviderTypes(configStore);
     await migrateApiKeyToAuth(configStore);
-    authLog.verbose('main-instance', 'Leader startup migrations completed');
+    authLog.verbose("main-instance", "Leader startup migrations completed");
   };
 
   const setMainInstanceReadyIfPossible = (): void => {
@@ -81,8 +83,8 @@ export async function activate(
       !mainInstance.isLeader()
     ) {
       authLog.verbose(
-        'main-instance',
-        'Deferring leader ready state until startup prerequisites are satisfied',
+        "main-instance",
+        "Deferring leader ready state until startup prerequisites are satisfied",
         {
           mainInstanceHandlersRegistered,
           leaderStartupReady,
@@ -95,15 +97,15 @@ export async function activate(
       clearTimeout(leaderPromotionRetryTimer);
       leaderPromotionRetryTimer = undefined;
     }
-    authLog.verbose('main-instance', 'Marking leader as ready');
+    authLog.verbose("main-instance", "Marking leader as ready");
     mainInstance.setReady(true);
   };
 
   const scheduleLeaderPromotionRetry = (error: unknown): void => {
     leaderStartupReady = false;
     authLog.error(
-      'main-instance',
-      'Leader promotion finalization failed; scheduling retry',
+      "main-instance",
+      "Leader promotion finalization failed; scheduling retry",
       error,
     );
     if (!mainInstance.isLeader() || leaderPromotionRetryTimer) {
@@ -123,25 +125,25 @@ export async function activate(
   const finalizeLeaderPromotion = async (): Promise<void> => {
     if (!mainInstance.isLeader()) {
       authLog.verbose(
-        'main-instance',
-        'Skipping leader promotion finalization because this instance is not leader',
+        "main-instance",
+        "Skipping leader promotion finalization because this instance is not leader",
       );
       return;
     }
-    authLog.verbose('main-instance', 'Finalizing leader promotion');
+    authLog.verbose("main-instance", "Finalizing leader promotion");
     await runLeaderStartupMigrations();
     if (!mainInstance.isLeader()) {
       leaderStartupReady = false;
       authLog.verbose(
-        'main-instance',
-        'Leader promotion interrupted before startup finished',
+        "main-instance",
+        "Leader promotion interrupted before startup finished",
       );
       return;
     }
     leaderStartupReady = true;
     authLog.verbose(
-      'main-instance',
-      'Leader startup marked ready; scheduling secret storage maintenance',
+      "main-instance",
+      "Leader startup marked ready; scheduling secret storage maintenance",
     );
     runSecretStorageMaintenanceOnStartup(configStore, secretStore);
     setMainInstanceReadyIfPossible();
@@ -150,21 +152,21 @@ export async function activate(
   const ensureLeaderPromotionFinalized = (): Promise<void> => {
     if (!mainInstance.isLeader()) {
       authLog.verbose(
-        'main-instance',
-        'Skipping leader promotion finalization request because this instance is not leader',
+        "main-instance",
+        "Skipping leader promotion finalization request because this instance is not leader",
       );
       return Promise.resolve();
     }
     if (leaderPromotionPromise) {
       authLog.verbose(
-        'main-instance',
-        'Leader promotion finalization already in progress; joining existing promise',
+        "main-instance",
+        "Leader promotion finalization already in progress; joining existing promise",
       );
       return leaderPromotionPromise;
     }
-    authLog.verbose('main-instance', 'Starting leader promotion finalization');
+    authLog.verbose("main-instance", "Starting leader promotion finalization");
     leaderPromotionPromise = finalizeLeaderPromotion().finally(() => {
-      authLog.verbose('main-instance', 'Leader promotion finalization settled');
+      authLog.verbose("main-instance", "Leader promotion finalization settled");
       leaderPromotionPromise = undefined;
     });
     return leaderPromotionPromise;
@@ -172,8 +174,12 @@ export async function activate(
 
   context.subscriptions.push(
     mainInstance.onDidChangeRole((snapshot) => {
-      authLog.verbose('main-instance', 'Observed main-instance role change', snapshot);
-      if (snapshot.role !== 'leader') {
+      authLog.verbose(
+        "main-instance",
+        "Observed main-instance role change",
+        snapshot,
+      );
+      if (snapshot.role !== "leader") {
         leaderStartupReady = false;
         if (leaderPromotionRetryTimer) {
           clearTimeout(leaderPromotionRetryTimer);
@@ -235,7 +241,7 @@ export async function activate(
     officialModelsManager,
   });
   mainInstanceHandlersRegistered = true;
-  authLog.verbose('main-instance', 'Main-instance handlers registered');
+  authLog.verbose("main-instance", "Main-instance handlers registered");
   setMainInstanceReadyIfPossible();
 
   // Register the language model chat provider
@@ -249,8 +255,38 @@ export async function activate(
   // Trigger initial model cache refresh
   chatProvider.handleConfigurationChange();
 
+  // Initialize ACP agent management
+  const acpConfigStore = new AcpConfigStore();
+  context.subscriptions.push(acpConfigStore);
+  const acpArgvManager = new AcpArgvManager();
+
+  // Prompt user to configure argv.json when agents are present but proposed API is missing
+  if (acpConfigStore.agents.length > 0) {
+    void acpArgvManager.promptIfNeeded();
+  }
+  context.subscriptions.push(
+    acpConfigStore.onDidChange(() => {
+      if (acpConfigStore.agents.length > 0) {
+        void acpArgvManager.promptIfNeeded();
+      }
+    }),
+  );
+
+  // Register ACP agents as chat participants / language model providers
+  const acpOutputChannel = vscode.window.createOutputChannel("ACP Client", {
+    log: true,
+  });
+  context.subscriptions.push(acpOutputChannel);
+  registerAcpAgents(acpConfigStore.agents, acpOutputChannel, context);
+
   // Register commands
-  registerCommands(context, configStore, secretStore, uriHandler);
+  registerCommands(
+    context,
+    configStore,
+    secretStore,
+    uriHandler,
+    acpConfigStore,
+  );
 
   context.subscriptions.push(
     registerBalanceStatusBar({ context, store: configStore }),
@@ -262,9 +298,12 @@ export async function activate(
   context.subscriptions.push(
     configStore.onDidChange(() => {
       chatProvider.handleConfigurationChange();
-      enqueueMaintenance('cleanup-unused-secrets-on-config-change', async () => {
-        await cleanupUnusedSecrets(secretStore);
-      });
+      enqueueMaintenance(
+        "cleanup-unused-secrets-on-config-change",
+        async () => {
+          await cleanupUnusedSecrets(secretStore);
+        },
+      );
     }),
   );
 
@@ -297,37 +336,38 @@ export function registerCommands(
   configStore: ConfigStore,
   secretStore: SecretStore,
   uriHandler: EventedUriHandler,
+  acpConfigStore: AcpConfigStore,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('unifyChatProvider.addProvider', () =>
+    vscode.commands.registerCommand("unifyChatProvider.addProvider", () =>
       addProvider(configStore, secretStore, uriHandler),
     ),
 
-    vscode.commands.registerCommand('unifyChatProvider.removeProvider', () =>
+    vscode.commands.registerCommand("unifyChatProvider.removeProvider", () =>
       removeProvider(configStore, secretStore, uriHandler),
     ),
-    vscode.commands.registerCommand('unifyChatProvider.importConfig', () =>
+    vscode.commands.registerCommand("unifyChatProvider.importConfig", () =>
       addProviderFromConfig(configStore, secretStore, uriHandler),
     ),
     vscode.commands.registerCommand(
-      'unifyChatProvider.addProviderFromWellKnownProviderList',
+      "unifyChatProvider.addProviderFromWellKnownProviderList",
       () => addProviderFromWellKnownList(configStore, secretStore, uriHandler),
     ),
     vscode.commands.registerCommand(
-      'unifyChatProvider.importConfigFromOtherApplications',
+      "unifyChatProvider.importConfigFromOtherApplications",
       () => importProviders(configStore, secretStore, uriHandler),
     ),
-    vscode.commands.registerCommand('unifyChatProvider.exportConfig', () =>
+    vscode.commands.registerCommand("unifyChatProvider.exportConfig", () =>
       exportAllProviders(configStore, secretStore, uriHandler),
     ),
-    vscode.commands.registerCommand('unifyChatProvider.manageProviders', () =>
-      manageProviders(configStore, secretStore, uriHandler),
+    vscode.commands.registerCommand("unifyChatProvider.manageProviders", () =>
+      manageProviders(configStore, secretStore, uriHandler, acpConfigStore),
     ),
-    vscode.commands.registerCommand('unifyChatProvider.manageBalances', () =>
+    vscode.commands.registerCommand("unifyChatProvider.manageBalances", () =>
       manageBalances(configStore, secretStore, uriHandler),
     ),
     vscode.commands.registerCommand(
-      'unifyChatProvider.refreshAllProvidersOfficialModels',
+      "unifyChatProvider.refreshAllProvidersOfficialModels",
       async () => {
         if (!(await ensureMainInstanceCompatibility())) {
           return;
@@ -337,7 +377,7 @@ export function registerCommands(
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
-              title: t('Refreshing official models...'),
+              title: t("Refreshing official models..."),
               cancellable: false,
             },
             async () => {
@@ -352,17 +392,17 @@ export function registerCommands(
         }
         if (refreshedCount === 0) {
           vscode.window.showInformationMessage(
-            t('No providers have auto-fetch official models enabled.'),
+            t("No providers have auto-fetch official models enabled."),
           );
           return;
         }
         vscode.window.showInformationMessage(
-          t('Refreshed official models for {0} provider(s).', refreshedCount),
+          t("Refreshed official models for {0} provider(s).", refreshedCount),
         );
       },
     ),
     vscode.commands.registerCommand(
-      'unifyChatProvider.refreshAllProvidersBalance',
+      "unifyChatProvider.refreshAllProvidersBalance",
       async () => {
         if (!(await ensureMainInstanceCompatibility())) {
           return;
@@ -373,7 +413,7 @@ export function registerCommands(
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
-              title: t('Refreshing provider balances...'),
+              title: t("Refreshing provider balances..."),
               cancellable: false,
             },
             async () => {
@@ -389,15 +429,18 @@ export function registerCommands(
 
         if (refreshedCount === 0) {
           vscode.window.showInformationMessage(
-            t('No providers have balance monitoring configured.'),
+            t("No providers have balance monitoring configured."),
           );
           return;
         }
 
         vscode.window.showInformationMessage(
-          t('Refreshed balances for {0} provider(s).', refreshedCount),
+          t("Refreshed balances for {0} provider(s).", refreshedCount),
         );
       },
+    ),
+    vscode.commands.registerCommand("unifyChatProvider.manageAcpAgents", () =>
+      manageAcpAgents(configStore, secretStore, acpConfigStore, uriHandler),
     ),
   );
 }
@@ -411,13 +454,10 @@ export function deactivate(): void {
 
 let maintenanceQueue: Promise<void> = Promise.resolve();
 
-function enqueueMaintenance(
-  label: string,
-  work: () => Promise<void>,
-): void {
+function enqueueMaintenance(label: string, work: () => Promise<void>): void {
   if (!mainInstance.isLeader()) {
     authLog.verbose(
-      'main-instance',
+      "main-instance",
       `Skipping maintenance enqueue because this instance is not leader (${label})`,
     );
     return;
@@ -425,24 +465,24 @@ function enqueueMaintenance(
   const run = async (): Promise<void> => {
     if (!mainInstance.isLeader()) {
       authLog.verbose(
-        'main-instance',
+        "main-instance",
         `Skipping queued maintenance because leadership changed before execution (${label})`,
       );
       return;
     }
     try {
-      authLog.verbose('main-instance', `Starting maintenance task (${label})`);
+      authLog.verbose("main-instance", `Starting maintenance task (${label})`);
       await work();
-      authLog.verbose('main-instance', `Completed maintenance task (${label})`);
+      authLog.verbose("main-instance", `Completed maintenance task (${label})`);
     } catch (error) {
       authLog.error(
-        'main-instance',
+        "main-instance",
         `Secret storage maintenance failed (${label})`,
         error,
       );
       const message = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(
-        t('Failed to maintain secret storage: {0}', message),
+        t("Failed to maintain secret storage: {0}", message),
         { modal: true },
       );
     }
@@ -469,15 +509,18 @@ function registerSecretStorageMaintenance(
       }
       lastGlobalStoreApiKeyInSettings = nextGlobalStoreApiKeyInSettings;
 
-      enqueueMaintenance('migrate-api-key-storage-on-setting-change', async () => {
-        await migrateApiKeyStorage({
-          configStore,
-          secretStore,
-          storeApiKeyInSettings: nextGlobalStoreApiKeyInSettings,
-          showProgress: true,
-        });
-        await cleanupUnusedSecrets(secretStore);
-      });
+      enqueueMaintenance(
+        "migrate-api-key-storage-on-setting-change",
+        async () => {
+          await migrateApiKeyStorage({
+            configStore,
+            secretStore,
+            storeApiKeyInSettings: nextGlobalStoreApiKeyInSettings,
+            showProgress: true,
+          });
+          await cleanupUnusedSecrets(secretStore);
+        },
+      );
     }),
   );
 }
@@ -486,7 +529,7 @@ function runSecretStorageMaintenanceOnStartup(
   configStore: ConfigStore,
   secretStore: SecretStore,
 ): void {
-  enqueueMaintenance('startup-secret-storage-maintenance', async () => {
+  enqueueMaintenance("startup-secret-storage-maintenance", async () => {
     await migrateApiKeyStorage({
       configStore,
       secretStore,
@@ -514,17 +557,19 @@ function registerIgnoredScopeConfigurationWarning(
     }
     hasWarnedThisSession = true;
 
-    const openUserSettingsAction = t('Open User Settings');
+    const openUserSettingsAction = t("Open User Settings");
     const message = t(
-      'Detected workspace-scoped settings for Unify Chat Provider ({0}). They are ignored and related credentials may be removed automatically. Please move them to user settings (global), then re-enter API keys or re-authorize OAuth if prompted.',
-      ignoredKeys.map((key) => `${CONFIG_NAMESPACE}.${key}`).join(', '),
+      "Detected workspace-scoped settings for Unify Chat Provider ({0}). They are ignored and related credentials may be removed automatically. Please move them to user settings (global), then re-enter API keys or re-authorize OAuth if prompted.",
+      ignoredKeys.map((key) => `${CONFIG_NAMESPACE}.${key}`).join(", "),
     );
 
     void vscode.window
       .showWarningMessage(message, openUserSettingsAction)
       .then((selection) => {
         if (selection === openUserSettingsAction) {
-          void vscode.commands.executeCommand('workbench.action.openSettingsJson');
+          void vscode.commands.executeCommand(
+            "workbench.action.openSettingsJson",
+          );
         }
       });
   };

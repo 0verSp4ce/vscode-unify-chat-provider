@@ -10,4 +10,5 @@ export {
   importProviders,
   exportAllProviders,
   removeProvider,
-} from './provider-ui';
+  manageAcpAgents,
+} from "./provider-ui";

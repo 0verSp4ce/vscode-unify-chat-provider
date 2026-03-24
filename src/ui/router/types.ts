@@ -1,30 +1,32 @@
-import type { ConfigStore } from '../../config-store';
-import type { ProviderType } from '../../client/definitions';
-import { ProviderConfig, ModelConfig, TimeoutConfig } from '../../types';
-import type { RetryConfig } from '../../utils';
-import type { WellKnownProviderConfig } from '../../well-known/providers';
-import type { OfficialModelsFetchState } from '../../official-models-manager';
-import type { SecretStore } from '../../secret';
-import type { EventedUriHandler } from '../../uri-handler';
-import type { ProviderFormDraft } from '../form-utils';
+import type { ConfigStore } from "../../config-store";
+import type { ProviderType } from "../../client/definitions";
+import { ProviderConfig, ModelConfig, TimeoutConfig } from "../../types";
+import type { RetryConfig } from "../../utils";
+import type { WellKnownProviderConfig } from "../../well-known/providers";
+import type { OfficialModelsFetchState } from "../../official-models-manager";
+import type { SecretStore } from "../../secret";
+import type { EventedUriHandler } from "../../uri-handler";
+import type { ProviderFormDraft } from "../form-utils";
+import type { AcpConfigStore, AcpAgentDraft, AcpAgentEntry } from "../../acp";
 
 export interface UiContext {
   store: ConfigStore;
   secretStore: SecretStore;
   uriHandler?: EventedUriHandler;
+  acpStore?: AcpConfigStore;
 }
 
 export interface ProviderListRoute {
-  kind: 'providerList';
+  kind: "providerList";
 }
 
 export interface BalanceProviderListRoute {
-  kind: 'balanceProviderList';
+  kind: "balanceProviderList";
 }
 
 export interface ProviderFormRoute {
-  kind: 'providerForm';
-  mode?: 'full' | 'settings';
+  kind: "providerForm";
+  mode?: "full" | "settings";
   providerName?: string;
   initialConfig?: Partial<ProviderConfig>;
   existing?: ProviderConfig;
@@ -33,24 +35,24 @@ export interface ProviderFormRoute {
 }
 
 export interface WellKnownProviderListRoute {
-  kind: 'wellKnownProviderList';
+  kind: "wellKnownProviderList";
 }
 
 export interface WellKnownProviderNameRoute {
-  kind: 'wellKnownProviderName';
+  kind: "wellKnownProviderName";
   provider: WellKnownProviderConfig;
   draft: ProviderFormDraft;
 }
 
 export interface WellKnownProviderAuthRoute {
-  kind: 'wellKnownProviderAuth';
+  kind: "wellKnownProviderAuth";
   provider: WellKnownProviderConfig;
   draft: ProviderFormDraft;
 }
 
 export interface ModelListRoute {
-  kind: 'modelList';
-  invocation: 'addProvider' | 'addFromWellKnownProvider' | 'providerEdit';
+  kind: "modelList";
+  invocation: "addProvider" | "addFromWellKnownProvider" | "providerEdit";
   models: ModelConfig[];
   providerLabel: string;
   /** Unique session ID for draft state management */
@@ -64,13 +66,13 @@ export interface ModelListRoute {
   existing?: ProviderConfig;
   originalName?: string;
   confirmDiscardOnBack?: boolean;
-  onSave?: () => Promise<'saved' | 'invalid' | 'cancelled'>;
-  afterSave?: 'pop' | 'popToRoot';
+  onSave?: () => Promise<"saved" | "invalid" | "cancelled">;
+  afterSave?: "pop" | "popToRoot";
 }
 
 export interface ModelFormRoute {
-  kind: 'modelForm';
-  mode?: 'full' | 'import';
+  kind: "modelForm";
+  mode?: "full" | "import";
   providerLabel?: string;
   providerType?: ProviderType;
   model?: ModelConfig;
@@ -81,7 +83,7 @@ export interface ModelFormRoute {
 }
 
 export interface ModelViewRoute {
-  kind: 'modelView';
+  kind: "modelView";
   providerLabel?: string;
   providerType?: ProviderType;
   model: ModelConfig;
@@ -89,32 +91,32 @@ export interface ModelViewRoute {
 }
 
 export interface ModelSelectionRoute {
-  kind: 'modelSelection';
+  kind: "modelSelection";
   title: string;
   existingModels: ModelConfig[];
   fetchModels: () => Promise<ModelConfig[]>;
 }
 
 export interface TimeoutFormRoute {
-  kind: 'timeoutForm';
+  kind: "timeoutForm";
   timeout: TimeoutConfig;
   retry: RetryConfig;
   draft: ProviderFormDraft;
 }
 
 export interface ImportProvidersRoute {
-  kind: 'importProviders';
+  kind: "importProviders";
 }
 
 export interface ProviderDraftFormRoute {
-  kind: 'providerDraftForm';
+  kind: "providerDraftForm";
   draft: ProviderFormDraft;
   original: ProviderFormDraft;
   skipSecretCleanupOnDiscard?: boolean;
 }
 
 export interface ImportProviderConfigArrayRoute {
-  kind: 'importProviderConfigArray';
+  kind: "importProviderConfigArray";
   configs: Partial<ProviderConfig>[];
   drafts?: ProviderFormDraft[];
   selectedIds?: Set<number>;
@@ -122,7 +124,7 @@ export interface ImportProviderConfigArrayRoute {
 }
 
 export interface ImportModelConfigArrayRoute {
-  kind: 'importModelConfigArray';
+  kind: "importModelConfigArray";
   models: ModelConfig[];
   /** Existing models to check conflicts against and append into on completion. */
   targetModels: ModelConfig[];
@@ -130,6 +132,21 @@ export interface ImportModelConfigArrayRoute {
   providerType?: ProviderType;
   selectedIds?: Set<number>;
   editingEntryId?: number;
+}
+
+export interface AcpAgentListRoute {
+  kind: "acpAgentList";
+}
+
+export interface AcpAgentFormRoute {
+  kind: "acpAgentForm";
+  draft: AcpAgentDraft;
+  existing?: AcpAgentEntry;
+  originalId?: string;
+}
+
+export interface AcpWellKnownAgentListRoute {
+  kind: "acpWellKnownAgentList";
 }
 
 export type UiRoute =
@@ -147,26 +164,29 @@ export type UiRoute =
   | ImportProvidersRoute
   | ProviderDraftFormRoute
   | ImportProviderConfigArrayRoute
-  | ImportModelConfigArrayRoute;
+  | ImportModelConfigArrayRoute
+  | AcpAgentListRoute
+  | AcpAgentFormRoute
+  | AcpWellKnownAgentListRoute;
 
 export type ProviderDraftFormResult =
-  | { kind: 'saved'; draft: ProviderFormDraft }
-  | { kind: 'cancelled' };
+  | { kind: "saved"; draft: ProviderFormDraft }
+  | { kind: "cancelled" };
 
 export type ModelFormResult =
-  | { kind: 'saved'; model: ModelConfig; originalId?: string }
-  | { kind: 'deleted'; modelId: string }
-  | { kind: 'cancelled' };
+  | { kind: "saved"; model: ModelConfig; originalId?: string }
+  | { kind: "deleted"; modelId: string }
+  | { kind: "cancelled" };
 
 export type UiResume =
-  | { kind: 'modelFormResult'; result: ModelFormResult }
-  | { kind: 'modelSelectionResult'; models: ModelConfig[] }
-  | { kind: 'providerDraftFormResult'; result: ProviderDraftFormResult };
+  | { kind: "modelFormResult"; result: ModelFormResult }
+  | { kind: "modelSelectionResult"; models: ModelConfig[] }
+  | { kind: "providerDraftFormResult"; result: ProviderDraftFormResult };
 
 export type UiNavAction =
-  | { kind: 'stay' }
-  | { kind: 'push'; route: UiRoute }
-  | { kind: 'replace'; route: UiRoute }
-  | { kind: 'pop'; resume?: UiResume }
-  | { kind: 'popToRoot'; resume?: UiResume }
-  | { kind: 'exit' };
+  | { kind: "stay" }
+  | { kind: "push"; route: UiRoute }
+  | { kind: "replace"; route: UiRoute }
+  | { kind: "pop"; resume?: UiResume }
+  | { kind: "popToRoot"; resume?: UiResume }
+  | { kind: "exit" };

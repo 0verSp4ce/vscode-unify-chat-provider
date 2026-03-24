@@ -1,21 +1,24 @@
-import type { UiContext, UiNavAction, UiResume, UiRoute } from './types';
+import type { UiContext, UiNavAction, UiResume, UiRoute } from "./types";
 import {
   runModelFormScreen,
   runModelViewScreen,
-} from '../screens/model-form-screen';
-import { runModelListScreen } from '../screens/model-list-screen';
-import { runModelSelectionScreen } from '../screens/model-selection-screen';
-import { runProviderFormScreen } from '../screens/provider-form-screen';
-import { runProviderListScreen } from '../screens/provider-list-screen';
-import { runBalanceProviderListScreen } from '../screens/balance-provider-list-screen';
-import { runTimeoutFormScreen } from '../screens/timeout-form-screen';
-import { runWellKnownProviderAuthScreen } from '../screens/well-known-provider-auth-screen';
-import { runWellKnownProviderListScreen } from '../screens/well-known-provider-list-screen';
-import { runWellKnownProviderNameScreen } from '../screens/well-known-provider-name-screen';
-import { runImportProvidersScreen } from '../screens/import-providers-screen';
-import { runProviderDraftFormScreen } from '../screens/provider-draft-form-screen';
-import { runImportProviderConfigArrayScreen } from '../screens/import-provider-config-array-screen';
-import { runImportModelConfigArrayScreen } from '../screens/import-model-config-array-screen';
+} from "../screens/model-form-screen";
+import { runModelListScreen } from "../screens/model-list-screen";
+import { runModelSelectionScreen } from "../screens/model-selection-screen";
+import { runProviderFormScreen } from "../screens/provider-form-screen";
+import { runProviderListScreen } from "../screens/provider-list-screen";
+import { runBalanceProviderListScreen } from "../screens/balance-provider-list-screen";
+import { runTimeoutFormScreen } from "../screens/timeout-form-screen";
+import { runWellKnownProviderAuthScreen } from "../screens/well-known-provider-auth-screen";
+import { runWellKnownProviderListScreen } from "../screens/well-known-provider-list-screen";
+import { runWellKnownProviderNameScreen } from "../screens/well-known-provider-name-screen";
+import { runImportProvidersScreen } from "../screens/import-providers-screen";
+import { runProviderDraftFormScreen } from "../screens/provider-draft-form-screen";
+import { runImportProviderConfigArrayScreen } from "../screens/import-provider-config-array-screen";
+import { runImportModelConfigArrayScreen } from "../screens/import-model-config-array-screen";
+import { runAcpAgentListScreen } from "../screens/acp-agent-list-screen";
+import { runAcpAgentFormScreen } from "../screens/acp-agent-form-screen";
+import { runAcpWellKnownAgentListScreen } from "../screens/acp-well-known-agent-list-screen";
 
 export async function runUiStack(
   ctx: UiContext,
@@ -30,19 +33,19 @@ export async function runUiStack(
     resume = undefined;
 
     switch (action.kind) {
-      case 'stay':
+      case "stay":
         continue;
-      case 'push':
+      case "push":
         stack.push(action.route);
         continue;
-      case 'replace':
+      case "replace":
         stack[stack.length - 1] = action.route;
         continue;
-      case 'pop':
+      case "pop":
         stack.pop();
         resume = action.resume;
         continue;
-      case 'popToRoot': {
+      case "popToRoot": {
         if (stack.length > 1) {
           stack.splice(1);
         } else {
@@ -51,7 +54,7 @@ export async function runUiStack(
         resume = action.resume;
         continue;
       }
-      case 'exit':
+      case "exit":
         return;
       default:
         assertNever(action);
@@ -65,36 +68,42 @@ async function dispatchRoute(
   resume: UiResume | undefined,
 ): Promise<UiNavAction> {
   switch (route.kind) {
-    case 'providerList':
+    case "providerList":
       return runProviderListScreen(ctx, route, resume);
-    case 'balanceProviderList':
+    case "balanceProviderList":
       return runBalanceProviderListScreen(ctx, route, resume);
-    case 'providerForm':
+    case "providerForm":
       return runProviderFormScreen(ctx, route, resume);
-    case 'wellKnownProviderList':
+    case "wellKnownProviderList":
       return runWellKnownProviderListScreen(ctx, route, resume);
-    case 'wellKnownProviderName':
+    case "wellKnownProviderName":
       return runWellKnownProviderNameScreen(ctx, route, resume);
-    case 'wellKnownProviderAuth':
+    case "wellKnownProviderAuth":
       return runWellKnownProviderAuthScreen(ctx, route, resume);
-    case 'modelList':
+    case "modelList":
       return runModelListScreen(ctx, route, resume);
-    case 'modelForm':
+    case "modelForm":
       return runModelFormScreen(ctx, route, resume);
-    case 'modelView':
+    case "modelView":
       return runModelViewScreen(ctx, route, resume);
-    case 'modelSelection':
+    case "modelSelection":
       return runModelSelectionScreen(ctx, route, resume);
-    case 'timeoutForm':
+    case "timeoutForm":
       return runTimeoutFormScreen(ctx, route, resume);
-    case 'importProviders':
+    case "importProviders":
       return runImportProvidersScreen(ctx, route, resume);
-    case 'providerDraftForm':
+    case "providerDraftForm":
       return runProviderDraftFormScreen(ctx, route, resume);
-    case 'importProviderConfigArray':
+    case "importProviderConfigArray":
       return runImportProviderConfigArrayScreen(ctx, route, resume);
-    case 'importModelConfigArray':
+    case "importModelConfigArray":
       return runImportModelConfigArrayScreen(ctx, route, resume);
+    case "acpAgentList":
+      return runAcpAgentListScreen(ctx, route, resume);
+    case "acpAgentForm":
+      return runAcpAgentFormScreen(ctx, route, resume);
+    case "acpWellKnownAgentList":
+      return runAcpWellKnownAgentListScreen(ctx, route, resume);
     default:
       return assertNever(route);
   }

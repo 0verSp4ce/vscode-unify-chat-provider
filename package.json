@@ -95,7 +95,6 @@
     "aiRelatedInformation",
     "aiSettingsSearch",
     "chatParticipantAdditions",
-    "chatEditing",
     "defaultChatParticipant",
     "contribSourceControlInputBoxMenu",
     "authLearnMore",
@@ -133,6 +132,376 @@
         "vendor": "unify-chat-provider",
         "displayName": "%languageModelChatProviders.displayName%",
         "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "acp-augment",
+        "displayName": "Augment Code [ACP]"
+      },
+      {
+        "vendor": "acp-claude",
+        "displayName": "Claude Code [ACP]"
+      },
+      {
+        "vendor": "acp-cline",
+        "displayName": "Cline [ACP]"
+      },
+      {
+        "vendor": "acp-codex",
+        "displayName": "Codex [ACP]"
+      },
+      {
+        "vendor": "acp-copilot",
+        "displayName": "Copilot [ACP]"
+      },
+      {
+        "vendor": "acp-geminicli",
+        "displayName": "Gemini [ACP]"
+      },
+      {
+        "vendor": "acp-kimi",
+        "displayName": "Kimi [ACP]"
+      },
+      {
+        "vendor": "acp-vibe",
+        "displayName": "Mistral Vibe [ACP]"
+      },
+      {
+        "vendor": "acp-opencode",
+        "displayName": "OpenCode [ACP]"
+      },
+      {
+        "vendor": "acp-qoder",
+        "displayName": "Qoder [ACP]"
+      },
+      {
+        "vendor": "acp-junie",
+        "displayName": "Junie [ACP]"
+      },
+      {
+        "vendor": "acp-minion",
+        "displayName": "Minion Code [ACP]"
+      },
+      {
+        "vendor": "acp-pi",
+        "displayName": "Pi [ACP]"
+      },
+      {
+        "vendor": "acp-qwen",
+        "displayName": "Qwen Code [ACP]"
+      },
+      {
+        "vendor": "acp-vtcode",
+        "displayName": "VT Code [ACP]"
+      },
+      {
+        "vendor": "acp-openhands",
+        "displayName": "OpenHands [ACP]"
+      },
+      {
+        "vendor": "acp-goose",
+        "displayName": "Goose [ACP]"
+      },
+      {
+        "vendor": "acp-fastagent",
+        "displayName": "fast-agent [ACP]"
+      },
+      {
+        "vendor": "acp-cagent",
+        "displayName": "Docker cagent [ACP]"
+      },
+      {
+        "vendor": "acp-stakpak",
+        "displayName": "Stakpak [ACP]"
+      },
+      {
+        "vendor": "acp-codeassistant",
+        "displayName": "Code Assistant [ACP]"
+      },
+      {
+        "vendor": "acp-blackbox",
+        "displayName": "Blackbox AI [ACP]"
+      },
+      {
+        "vendor": "acp-agentpool",
+        "displayName": "AgentPool [ACP]"
+      }
+    ],
+    "chatSessions": [
+      {
+        "name": "augment",
+        "type": "acp-augment",
+        "canDelegate": true,
+        "displayName": "Augment Code [ACP]",
+        "description": "Chat sessions backed by the Augment Code ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.augment",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "claude",
+        "type": "acp-claude",
+        "canDelegate": true,
+        "displayName": "Claude Code [ACP]",
+        "description": "Chat sessions backed by the Claude Code ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.claude",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "cline",
+        "type": "acp-cline",
+        "canDelegate": true,
+        "displayName": "Cline [ACP]",
+        "description": "Chat sessions backed by the Cline ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.cline",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "codex",
+        "type": "acp-codex",
+        "canDelegate": true,
+        "displayName": "Codex [ACP]",
+        "description": "Chat sessions backed by the Codex ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.codex",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "copilot",
+        "type": "acp-copilot",
+        "canDelegate": true,
+        "displayName": "Copilot [ACP]",
+        "description": "Chat sessions backed by the Copilot ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.copilot",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "geminicli",
+        "type": "acp-geminicli",
+        "canDelegate": true,
+        "displayName": "Gemini [ACP]",
+        "description": "Chat sessions backed by the Gemini CLI ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.geminicli",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "kimi",
+        "type": "acp-kimi",
+        "canDelegate": true,
+        "displayName": "Kimi [ACP]",
+        "description": "Chat sessions backed by the Kimi ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.kimi",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "vibe",
+        "type": "acp-vibe",
+        "canDelegate": true,
+        "displayName": "Mistral Vibe [ACP]",
+        "description": "Chat sessions backed by the Mistral Vibe ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.vibe",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "opencode",
+        "type": "acp-opencode",
+        "canDelegate": true,
+        "displayName": "OpenCode [ACP]",
+        "description": "Chat sessions backed by the OpenCode ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.opencode",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "qoder",
+        "type": "acp-qoder",
+        "canDelegate": true,
+        "displayName": "Qoder [ACP]",
+        "description": "Chat sessions backed by the Qoder ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.qoder",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "junie",
+        "type": "acp-junie",
+        "canDelegate": true,
+        "displayName": "Junie [ACP]",
+        "description": "Chat sessions backed by the Junie ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.junie",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "minion",
+        "type": "acp-minion",
+        "canDelegate": true,
+        "displayName": "Minion Code [ACP]",
+        "description": "Chat sessions backed by the Minion Code ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.minion",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "pi",
+        "type": "acp-pi",
+        "canDelegate": true,
+        "displayName": "Pi [ACP]",
+        "description": "Chat sessions backed by the Pi ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.pi",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "qwen",
+        "type": "acp-qwen",
+        "canDelegate": true,
+        "displayName": "Qwen Code [ACP]",
+        "description": "Chat sessions backed by the Qwen Code ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.qwen",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "vtcode",
+        "type": "acp-vtcode",
+        "canDelegate": true,
+        "displayName": "VT Code [ACP]",
+        "description": "Chat sessions backed by the VT Code ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.vtcode",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "openhands",
+        "type": "acp-openhands",
+        "canDelegate": true,
+        "displayName": "OpenHands [ACP]",
+        "description": "Chat sessions backed by the OpenHands ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.openhands",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "goose",
+        "type": "acp-goose",
+        "canDelegate": true,
+        "displayName": "Goose [ACP]",
+        "description": "Chat sessions backed by the Goose ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.goose",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "fastagent",
+        "type": "acp-fastagent",
+        "canDelegate": true,
+        "displayName": "fast-agent [ACP]",
+        "description": "Chat sessions backed by the fast-agent ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.fastagent",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "cagent",
+        "type": "acp-cagent",
+        "canDelegate": true,
+        "displayName": "Docker cagent [ACP]",
+        "description": "Chat sessions backed by the Docker cagent ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.cagent",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "stakpak",
+        "type": "acp-stakpak",
+        "canDelegate": true,
+        "displayName": "Stakpak [ACP]",
+        "description": "Chat sessions backed by the Stakpak ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.stakpak",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "codeassistant",
+        "type": "acp-codeassistant",
+        "canDelegate": true,
+        "displayName": "Code Assistant [ACP]",
+        "description": "Chat sessions backed by the Code Assistant ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.codeassistant",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "blackbox",
+        "type": "acp-blackbox",
+        "canDelegate": true,
+        "displayName": "Blackbox AI [ACP]",
+        "description": "Chat sessions backed by the Blackbox AI ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.blackbox",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
+      },
+      {
+        "name": "agentpool",
+        "type": "acp-agentpool",
+        "canDelegate": true,
+        "displayName": "AgentPool [ACP]",
+        "description": "Chat sessions backed by the AgentPool ACP agent",
+        "icon": "$(hubot)",
+        "when": "config.unifyChatProvider.agents.agentpool",
+        "capabilities": {
+          "supportsFileAttachments": true
+        }
       }
     ],
     "commands": [
@@ -175,6 +544,10 @@
       {
         "command": "unifyChatProvider.refreshAllProvidersBalance",
         "title": "%command.refreshAllProvidersBalance.title%"
+      },
+      {
+        "command": "unifyChatProvider.manageAcpAgents",
+        "title": "Unify Chat Provider: Manage ACP Agents"
       }
     ],
     "configuration": {
@@ -287,6 +660,45 @@
                   "type": "number",
                   "description": "%configuration.networkSettings.retry.jitterFactor.description%",
                   "default": 0.1
+                }
+              }
+            }
+          }
+        },
+        "unifyChatProvider.agents": {
+          "type": "object",
+          "description": "ACP agent configurations keyed by agent ID",
+          "default": {},
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "Display label shown in the chat UI"
+              },
+              "command": {
+                "type": "string",
+                "description": "CLI executable that starts the ACP agent"
+              },
+              "args": {
+                "type": "array",
+                "description": "Arguments passed to the CLI",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the agent process"
+              },
+              "env": {
+                "type": "object",
+                "description": "Environment variables merged with the VS Code shell",
+                "additionalProperties": {
+                  "type": "string"
                 }
               }
             }
@@ -985,6 +1397,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^0.14.1",
     "@anthropic-ai/sdk": "^0.78.0",
     "@google/genai": "^1.44.0",
     "@huggingface/tokenizers": "^0.1.2",

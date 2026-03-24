@@ -1,26 +1,26 @@
-import * as vscode from 'vscode';
-import { ConfigStore } from '../config-store';
-import { showCopiedBase64Config } from './base64-config';
-import {
-  promptForProviderImportConfig,
-} from './import-from-config';
-import { runUiStack } from './router/stack-router';
-import type { UiContext } from './router/types';
-import type { EventedUriHandler } from '../uri-handler';
-import { runRemoveProviderScreen } from './screens/remove-provider-screen';
-import { SecretStore } from '../secret';
-import { resolveProvidersForExportOrShowError } from '../auth/auth-transfer';
-import { resolveProvidersBalanceForExportOrShowError } from '../balance/balance-transfer';
-import { promptForSensitiveDataInclusion } from './provider-ops';
-import { t } from '../i18n';
+import * as vscode from "vscode";
+import { ConfigStore } from "../config-store";
+import { showCopiedBase64Config } from "./base64-config";
+import { promptForProviderImportConfig } from "./import-from-config";
+import { runUiStack } from "./router/stack-router";
+import type { UiContext } from "./router/types";
+import type { EventedUriHandler } from "../uri-handler";
+import { runRemoveProviderScreen } from "./screens/remove-provider-screen";
+import { SecretStore } from "../secret";
+import { resolveProvidersForExportOrShowError } from "../auth/auth-transfer";
+import { resolveProvidersBalanceForExportOrShowError } from "../balance/balance-transfer";
+import { promptForSensitiveDataInclusion } from "./provider-ops";
+import { t } from "../i18n";
+import type { AcpConfigStore } from "../acp";
 
 export async function manageProviders(
   store: ConfigStore,
   secretStore: SecretStore,
   uriHandler?: EventedUriHandler,
+  acpStore?: AcpConfigStore,
 ): Promise<void> {
-  const ctx: UiContext = { store, secretStore, uriHandler };
-  await runUiStack(ctx, { kind: 'providerList' });
+  const ctx: UiContext = { store, secretStore, uriHandler, acpStore };
+  await runUiStack(ctx, { kind: "providerList" });
 }
 
 export async function manageBalances(
@@ -29,7 +29,7 @@ export async function manageBalances(
   uriHandler?: EventedUriHandler,
 ): Promise<void> {
   const ctx: UiContext = { store, secretStore, uriHandler };
-  await runUiStack(ctx, { kind: 'balanceProviderList' });
+  await runUiStack(ctx, { kind: "balanceProviderList" });
 }
 
 export async function addProvider(
@@ -38,7 +38,7 @@ export async function addProvider(
   uriHandler?: EventedUriHandler,
 ): Promise<void> {
   const ctx: UiContext = { store, secretStore, uriHandler };
-  await runUiStack(ctx, { kind: 'providerForm' });
+  await runUiStack(ctx, { kind: "providerForm" });
 }
 
 export async function addProviderFromConfig(
@@ -50,15 +50,18 @@ export async function addProviderFromConfig(
   const imported = await promptForProviderImportConfig();
   if (!imported) return;
 
-  if (imported.kind === 'multiple') {
+  if (imported.kind === "multiple") {
     await runUiStack(ctx, {
-      kind: 'importProviderConfigArray',
+      kind: "importProviderConfigArray",
       configs: imported.configs,
     });
     return;
   }
 
-  await runUiStack(ctx, { kind: 'providerForm', initialConfig: imported.config });
+  await runUiStack(ctx, {
+    kind: "providerForm",
+    initialConfig: imported.config,
+  });
 }
 
 export async function addProviderFromWellKnownList(
@@ -67,7 +70,7 @@ export async function addProviderFromWellKnownList(
   uriHandler?: EventedUriHandler,
 ): Promise<void> {
   const ctx: UiContext = { store, secretStore, uriHandler };
-  await runUiStack(ctx, { kind: 'wellKnownProviderList' });
+  await runUiStack(ctx, { kind: "wellKnownProviderList" });
 }
 
 export async function importProviders(
@@ -76,7 +79,7 @@ export async function importProviders(
   uriHandler?: EventedUriHandler,
 ): Promise<void> {
   const ctx: UiContext = { store, secretStore, uriHandler };
-  await runUiStack(ctx, { kind: 'importProviders' });
+  await runUiStack(ctx, { kind: "importProviders" });
 }
 
 export async function exportAllProviders(
@@ -86,7 +89,7 @@ export async function exportAllProviders(
 ): Promise<void> {
   const providers = store.endpoints;
   if (providers.length === 0) {
-    vscode.window.showInformationMessage(t('No providers configured.'));
+    vscode.window.showInformationMessage(t("No providers configured."));
     return;
   }
 
@@ -100,11 +103,13 @@ export async function exportAllProviders(
   });
   if (!resolved) return;
 
-  const resolvedWithBalance = await resolveProvidersBalanceForExportOrShowError({
-    secretStore,
-    providers: resolved,
-    includeSensitive,
-  });
+  const resolvedWithBalance = await resolveProvidersBalanceForExportOrShowError(
+    {
+      secretStore,
+      providers: resolved,
+      includeSensitive,
+    },
+  );
   if (!resolvedWithBalance) return;
 
   await showCopiedBase64Config(resolvedWithBalance);
@@ -116,4 +121,14 @@ export async function removeProvider(
   _uriHandler?: EventedUriHandler,
 ): Promise<void> {
   await runRemoveProviderScreen(store, secretStore);
+}
+
+export async function manageAcpAgents(
+  store: ConfigStore,
+  secretStore: SecretStore,
+  acpStore: AcpConfigStore,
+  uriHandler?: EventedUriHandler,
+): Promise<void> {
+  const ctx: UiContext = { store, secretStore, uriHandler, acpStore };
+  await runUiStack(ctx, { kind: "acpAgentList" });
 }
