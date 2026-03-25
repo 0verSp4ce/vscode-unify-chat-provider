@@ -33,3 +33,7 @@ export function decodeVscodeResource(resource: vscode.Uri): {
   const isUntitled = sessionId.startsWith("untitled-");
   return { isUntitled, sessionId };
 }
+
+export function getWorkspaceCwd(): string {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+}

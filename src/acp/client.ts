@@ -21,13 +21,11 @@ import {
   SetSessionModelRequest,
   SetSessionModeRequest,
   ListSessionsResponse,
-  McpServer,
-  McpServerStdio,
 } from "@agentclientprotocol/sdk";
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 import * as vscode from "vscode";
-import type { AcpAgentEntry, AcpMcpServerConfig } from "./types";
+import type { AcpAgentEntry } from "./types";
 
 const CLIENT_CAPABILITIES: ClientCapabilities = {
   fs: { readTextFile: false, writeTextFile: false },
@@ -52,6 +50,7 @@ export class AcpClient implements vscode.Disposable {
   private connection: ClientSideConnection | null = null;
   private readyPromise: Promise<void> | null = null;
   private mode: ClientMode = "new_session";
+  private _permissionLevel: string | undefined;
 
   private agentCapabilities?: InitializeResponse;
   private supportedModelState: SessionModelState | null = null;
@@ -79,17 +78,14 @@ export class AcpClient implements vscode.Disposable {
   // Session lifecycle
   // ---------------------------------------------------------------------------
 
-  async createSession(
-    cwd: string,
-    mcpServers: AcpMcpServerConfig[],
-  ): Promise<NewSessionResponse> {
+  async createSession(cwd: string): Promise<NewSessionResponse> {
     try {
       await this.ensureReady("new_session");
       if (!this.connection) throw new Error("ACP connection is not ready");
 
       const request: NewSessionRequest = {
         cwd,
-        mcpServers: serializeMcpServers(mcpServers),
+        mcpServers: [],
       };
       const response = await this.connection.newSession(request);
 
@@ -108,7 +104,6 @@ export class AcpClient implements vscode.Disposable {
   async loadSession(
     sessionId: string,
     cwd: string,
-    mcpServers: AcpMcpServerConfig[],
   ): Promise<{
     modeId: string | undefined;
     modelId: string | undefined;
@@ -128,7 +123,7 @@ export class AcpClient implements vscode.Disposable {
       const request: LoadSessionRequest = {
         sessionId,
         cwd,
-        mcpServers: serializeMcpServers(mcpServers),
+        mcpServers: [],
       };
       const response: LoadSessionResponse =
         await this.connection.loadSession(request);
@@ -248,6 +243,17 @@ export class AcpClient implements vscode.Disposable {
   }
 
   // ---------------------------------------------------------------------------
+  // Permission
+  // ---------------------------------------------------------------------------
+
+  setPermissionLevel(level: string | undefined): void {
+    this._permissionLevel = level;
+    this.logChannel.warn(
+      `[acp:${this.agent.id}] Permission level set to: ${JSON.stringify(level)}`,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // SDK callbacks
   // ---------------------------------------------------------------------------
 
@@ -255,13 +261,45 @@ export class AcpClient implements vscode.Disposable {
   async requestPermission(
     request: RequestPermissionRequest,
   ): Promise<RequestPermissionResponse> {
-    const firstOption = request.options[0];
-    if (!firstOption) {
-      return { outcome: { outcome: "cancelled" } };
+    this.logChannel.warn(
+      `[acp:${this.agent.id}] requestPermission called, _permissionLevel=${JSON.stringify(this._permissionLevel)}, options=${JSON.stringify(request.options.map((o) => ({ id: o.optionId, kind: o.kind, name: o.name })))}`,
+    );
+
+    // Auto-approve when the user has opted into any elevated permission level.
+    //
+    // VS Code's request.permissionLevel can be:
+    //   "autoApprove", "autopilot"           ← documented values
+    //   "bypassPermissions", "dontAsk", etc. ← Copilot-style permission modes
+    //   undefined                            ← user has not opted in
+    //
+    // Rather than maintaining an allowlist of known values, we invert the
+    // check: auto-approve for any non-default level. Only undefined and
+    // explicit "ask" / "default" values require manual approval.
+    if (
+      this._permissionLevel &&
+      !this._isAskPermissionLevel(this._permissionLevel)
+    ) {
+      // Prefer "allow_always" over "allow_once" for a smoother experience
+      const allowOption =
+        request.options.find((o) => o.kind === "allow_always") ??
+        request.options.find((o) => o.kind === "allow_once");
+      if (allowOption) {
+        this.logChannel.info(
+          `[acp:${this.agent.id}] Auto-approving permission (level: ${this._permissionLevel}, option: ${allowOption.optionId})`,
+        );
+        return {
+          outcome: { outcome: "selected", optionId: allowOption.optionId },
+        };
+      }
+      this.logChannel.warn(
+        `[acp:${this.agent.id}] Permission level is ${this._permissionLevel} but no allow option found in: ${JSON.stringify(request.options.map((o) => o.kind))}`,
+      );
     }
-    return {
-      outcome: { outcome: "selected", optionId: firstOption.optionId },
-    };
+
+    this.logChannel.warn(
+      `[acp:${this.agent.id}] Permission request denied by user`,
+    );
+    return { outcome: { outcome: "cancelled" } };
   }
 
   /** Called by the SDK connection when the agent sends a session update. */
@@ -291,13 +329,42 @@ export class AcpClient implements vscode.Disposable {
   // Internal
   // ---------------------------------------------------------------------------
 
+  /**
+   * Returns true if the permission level means "always ask the user".
+   * Any level NOT in this set is treated as "auto-approve".
+   */
+  private _isAskPermissionLevel(level: string): boolean {
+    const normalized = level.toLowerCase();
+    return (
+      normalized === "default" ||
+      normalized === "alwaysask" ||
+      normalized === "always_ask" ||
+      normalized === "ask"
+    );
+  }
+
   private async ensureReady(expectedMode: ClientMode): Promise<void> {
-    if (this.readyPromise) {
-      if (this.mode === expectedMode) {
-        return this.readyPromise;
+    // Check if we have a valid connection that's still alive
+    if (this.readyPromise && this.mode === expectedMode) {
+      try {
+        // Test if the process is still alive by checking if it's killed
+        if (this.agentProcess?.killed) {
+          this.logChannel.debug(
+            `Process is dead, recreating connection for mode: ${expectedMode}`,
+          );
+          this.invalidateConnection();
+        } else {
+          return this.readyPromise;
+        }
+      } catch (error) {
+        this.logChannel.debug(
+          `Connection test failed, recreating: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        this.invalidateConnection();
       }
     }
 
+    // Stop any existing process and create new connection
     await this.stopProcessAsync();
     this.readyPromise = this.createConnection(expectedMode);
     try {
@@ -306,6 +373,12 @@ export class AcpClient implements vscode.Disposable {
       this.readyPromise = null;
       throw error;
     }
+  }
+
+  private invalidateConnection(): void {
+    this.agentProcess = null;
+    this.connection = null;
+    this.readyPromise = null;
   }
 
   private async createConnection(connectionMode: ClientMode): Promise<void> {
@@ -346,6 +419,11 @@ export class AcpClient implements vscode.Disposable {
       this.logChannel.debug(
         `agent:${this.agent.id} exited with code ${code ?? "unknown"}`,
       );
+      // Clear stale connection state so the next ensureReady() spawns a
+      // fresh process instead of reusing a resolved-but-dead promise.
+      this.agentProcess = null;
+      this.connection = null;
+      this.readyPromise = null;
       this._onDidStop.fire();
     });
     proc.on("error", (error) => {
@@ -374,26 +452,4 @@ export class AcpClient implements vscode.Disposable {
     this.connection = null;
     this.readyPromise = null;
   }
-}
-
-// ---------------------------------------------------------------------------
-// MCP server serialization helpers
-// ---------------------------------------------------------------------------
-
-function serializeMcpServers(
-  mcpServers: AcpMcpServerConfig[] | undefined,
-): McpServer[] {
-  if (!mcpServers?.length) return [];
-  return mcpServers
-    .filter((c) => c.type === "stdio")
-    .map(
-      (c): McpServerStdio => ({
-        name: c.name,
-        command: c.command,
-        args: Array.from(c.args ?? []),
-        env: c.env
-          ? Object.entries(c.env).map(([name, value]) => ({ name, value }))
-          : [],
-      }),
-    );
 }

@@ -6,22 +6,6 @@
  */
 
 /**
- * MCP server configuration for stdio transport.
- */
-export interface AcpMcpServerConfig {
-  /** Transport type */
-  type: "stdio";
-  /** Display name for the MCP server */
-  name: string;
-  /** Executable that launches the MCP server */
-  command: string;
-  /** Arguments passed to the MCP server executable */
-  args?: string[];
-  /** Environment variables applied when starting the MCP server */
-  env?: Record<string, string>;
-}
-
-/**
  * Agent configuration entry persisted to `unifyChatProvider.agents.<agentId>`.
  */
 export interface AcpAgentConfig {
@@ -35,8 +19,6 @@ export interface AcpAgentConfig {
   cwd?: string;
   /** Environment variables merged with the VS Code shell */
   env?: Record<string, string>;
-  /** Optional list of MCP servers this agent should connect to */
-  mcpServers?: AcpMcpServerConfig[];
 }
 
 /**
@@ -55,8 +37,6 @@ export interface AcpAgentEntry {
   cwd?: string;
   /** Environment variables */
   env?: Record<string, string>;
-  /** MCP servers this agent connects to */
-  mcpServers: AcpMcpServerConfig[];
 }
 
 /**

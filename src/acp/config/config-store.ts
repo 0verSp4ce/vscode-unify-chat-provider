@@ -115,7 +115,6 @@ function normalizeEntry(id: string, raw: unknown): AcpAgentEntry | null {
       : [],
     cwd: typeof obj["cwd"] === "string" ? obj["cwd"] : undefined,
     env: normalizeStringRecord(obj["env"]),
-    mcpServers: [],
   };
 }
 

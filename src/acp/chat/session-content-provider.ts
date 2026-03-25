@@ -104,11 +104,11 @@ export class AcpChatSessionContentProvider
     return this.buildOptionsGroups(options);
   }
 
-  provideHandleOptionsChange(
+  async provideHandleOptionsChange(
     resource: vscode.Uri,
     updates: ReadonlyArray<vscode.ChatSessionOptionUpdate>,
     _token: vscode.CancellationToken,
-  ): void {
+  ): Promise<void> {
     const session = this.sessionManager.getActive(resource);
     if (!session) {
       this.logChannel.warn(
@@ -124,26 +124,33 @@ export class AcpChatSessionContentProvider
         .map((o) => o.id),
     );
 
-    for (const update of updates) {
-      if (update.optionId === OPTION_MODE && update.value) {
-        session.client.changeMode(session.acpSessionId, update.value);
-      }
+    try {
+      for (const update of updates) {
+        if (update.optionId === OPTION_MODE && update.value) {
+          await session.client.changeMode(session.acpSessionId, update.value);
+        }
 
-      if (update.optionId === OPTION_MODEL && update.value) {
-        session.client.changeModel(session.acpSessionId, update.value);
-      }
+        if (update.optionId === OPTION_MODEL && update.value) {
+          await session.client.changeModel(session.acpSessionId, update.value);
+        }
 
-      if (
-        knownThoughtLevelIds.has(update.optionId) &&
-        update.value &&
-        typeof update.value === "string"
-      ) {
-        session.client.setSessionConfigOption(
-          session.acpSessionId,
-          update.optionId,
-          update.value,
-        );
+        if (
+          knownThoughtLevelIds.has(update.optionId) &&
+          update.value &&
+          typeof update.value === "string"
+        ) {
+          await session.client.setSessionConfigOption(
+            session.acpSessionId,
+            update.optionId,
+            update.value,
+          );
+        }
       }
+    } catch (error) {
+      this.logChannel.error(
+        `Error handling options change for session ${session.acpSessionId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
     }
   }
 

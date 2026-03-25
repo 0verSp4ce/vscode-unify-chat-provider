@@ -76,7 +76,57 @@ export function draftToConfig(draft: AcpAgentDraft): AcpAgentConfig {
 function parseArgsString(input: string): string[] {
   const trimmed = input.trim();
   if (!trimmed) return [];
-  return trimmed.split(/\s+/);
+
+  const args: string[] = [];
+  let current = "";
+  let quoteChar: string | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    
+    if (escaped) {
+      // Previous character was a backslash, treat current char literally
+      current += ch;
+      escaped = false;
+      continue;
+    }
+    
+    if (ch === "\\") {
+      // Escape next character
+      escaped = true;
+      continue;
+    }
+    
+    if (quoteChar) {
+      // Inside quoted string
+      if (ch === quoteChar) {
+        // Closing quote
+        quoteChar = null;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"' || ch === "'") {
+      // Opening quote
+      quoteChar = ch;
+    } else if (/\s/.test(ch)) {
+      // Whitespace outside quotes
+      if (current) {
+        args.push(current);
+        current = "";
+      }
+    } else {
+      // Regular character
+      current += ch;
+    }
+  }
+  
+  // Handle remaining current argument and unclosed quotes
+  if (current || quoteChar) {
+    args.push(current);
+  }
+  
+  return args;
 }
 
 function parseEnvString(input: string): Record<string, string> {

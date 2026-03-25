@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 import type { SessionNotification } from "@agentclientprotocol/sdk";
 import * as vscode from "vscode";
 
@@ -35,89 +35,106 @@ export function createAcpSessionDb(
   context: vscode.ExtensionContext,
   logger: vscode.LogOutputChannel,
 ): AcpSessionDb {
-  return new SqliteSessionDb(context, logger);
+  return new AsyncSqliteSessionDb(context, logger);
 }
 
-class SqliteSessionDb implements AcpSessionDb {
-  private db?: DatabaseSync;
+class AsyncSqliteSessionDb implements AcpSessionDb {
+  private db: Database.Database | null = null;
+  private dbPath: string;
+  private isInitialized: boolean = false;
 
   private readonly _onDataChanged = new vscode.EventEmitter<void>();
   readonly onDataChanged = this._onDataChanged.event;
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly logger: vscode.LogOutputChannel,
   ) {
-    this.init();
-  }
-
-  private init(): void {
-    const acpDir = path.join(this.context.globalStorageUri.fsPath, ".acp");
+    const acpDir = path.join(context.globalStorageUri.fsPath, ".acp");
     if (!fs.existsSync(acpDir)) {
       fs.mkdirSync(acpDir, { recursive: true });
     }
-    const dbPath = path.join(acpDir, "acp-sessions.db");
-    this.logger.info(`Using ACP session database at: ${dbPath}`);
-    this.db = new DatabaseSync(dbPath);
-    this.db.exec(SCHEMA);
-    this.migrate();
+    this.dbPath = path.join(acpDir, "acp-sessions.db");
+    this.logger.info(`Using ACP session database at: ${this.dbPath}`);
   }
 
-  private migrate(): void {
-    // Add notifications column if it doesn't exist
-    const columns = this.db!.prepare(
-      "PRAGMA table_info(sessions)",
-    ).all() as Array<{ name: string }>;
-    const hasNotifications = columns.some((c) => c.name === "notifications");
-    if (!hasNotifications) {
-      this.db!.exec("ALTER TABLE sessions ADD COLUMN notifications TEXT");
-      this.logger.info("Migrated sessions table: added notifications column");
+  private async ensureInitialized(): Promise<void> {
+    if (this.isInitialized && this.db) return;
+    
+    try {
+      this.db = new Database(this.dbPath);
+      this.db.exec(SCHEMA);
+      await this.migrate();
+      this.isInitialized = true;
+    } catch (error) {
+      this.logger.error(`Failed to initialize database: ${error}`);
+      throw error;
+    }
+  }
+
+  private async migrate(): Promise<void> {
+    if (!this.db) return;
+    
+    try {
+      const columns = this.db.pragma('table_info(sessions)') as Array<{ name: string }>;
+      const hasNotifications = columns.some((c) => c.name === "notifications");
+      if (!hasNotifications) {
+        this.db.exec("ALTER TABLE sessions ADD COLUMN notifications TEXT");
+        this.logger.info("Migrated sessions table: added notifications column");
+      }
+    } catch (error) {
+      this.logger.error(`Migration failed: ${error}`);
+      throw error;
     }
   }
 
   async listSessions(agent: string, cwd: string): Promise<DiskSession[]> {
-    const rows = this.db!.prepare(
-      "SELECT session_id AS sessionId, cwd, title, updated_at AS updatedAt, notifications FROM sessions WHERE agent_type=? AND cwd=? ORDER BY updated_at DESC",
-    ).all(agent, cwd) as Array<{
-      sessionId: string;
-      cwd: string;
-      title: string;
-      updatedAt: number;
-      notifications: string | null;
-    }>;
-    return rows.map((row) => ({
-      sessionId: row.sessionId,
-      cwd: row.cwd,
-      title: row.title,
-      updatedAt: row.updatedAt,
-      notifications: deserializeNotifications(row.notifications),
-    }));
+    await this.ensureInitialized();
+    if (!this.db) throw new Error("Database not initialized");
+
+    try {
+      const stmt = this.db.prepare(
+        "SELECT session_id AS sessionId, cwd, title, updated_at AS updatedAt, notifications FROM sessions WHERE agent_type=? AND cwd=? ORDER BY updated_at DESC"
+      );
+      const rows = stmt.all(agent, cwd) as Array<{
+        sessionId: string;
+        cwd: string;
+        title: string;
+        updatedAt: number;
+        notifications: string | null;
+      }>;
+      
+      return rows.map((row) => ({
+        sessionId: row.sessionId,
+        cwd: row.cwd,
+        title: row.title,
+        updatedAt: row.updatedAt,
+        notifications: deserializeNotifications(row.notifications),
+      }));
+    } catch (error) {
+      this.logger.error(`Failed to list sessions: ${error}`);
+      throw error;
+    }
   }
 
   async upsertSession(agent: string, info: DiskSession): Promise<void> {
-    const notificationsJson = info.notifications
-      ? JSON.stringify(info.notifications)
-      : null;
-    const existing = this.db!.prepare(
-      "SELECT COUNT(*) AS count FROM sessions WHERE agent_type=? AND session_id=?",
-    ).get(agent, info.sessionId) as { count: number };
+    await this.ensureInitialized();
+    if (!this.db) throw new Error("Database not initialized");
 
-    if (existing.count > 0) {
-      const resp = this.db!.prepare(
-        "UPDATE sessions SET cwd=?, title=?, updated_at=?, notifications=? WHERE agent_type=? AND session_id=?",
-      ).run(
-        info.cwd,
-        info.title,
-        info.updatedAt,
-        notificationsJson,
-        agent,
-        info.sessionId,
+    try {
+      const notificationsJson = info.notifications
+        ? JSON.stringify(info.notifications)
+        : null;
+        
+      const stmt = this.db.prepare(
+        `INSERT INTO sessions (agent_type, session_id, cwd, title, updated_at, notifications)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(agent_type, session_id) DO UPDATE SET
+           cwd=excluded.cwd, title=excluded.title,
+           updated_at=excluded.updated_at, notifications=excluded.notifications`
       );
-      if (resp.changes > 0) this._onDataChanged.fire();
-    } else {
-      const resp = this.db!.prepare(
-        "INSERT OR IGNORE INTO sessions (agent_type, session_id, cwd, title, updated_at, notifications) VALUES (?, ?, ?, ?, ?, ?)",
-      ).run(
+      
+      const resp = stmt.run(
         agent,
         info.sessionId,
         info.cwd,
@@ -125,31 +142,70 @@ class SqliteSessionDb implements AcpSessionDb {
         info.updatedAt,
         notificationsJson,
       );
+      
       if (resp.changes > 0) this._onDataChanged.fire();
+    } catch (error) {
+      this.logger.error(`Failed to upsert session: ${error}`);
+      throw error;
     }
   }
 
   async deleteSession(agent: string, sessionId: string): Promise<void> {
-    const resp = this.db!.prepare(
-      "DELETE FROM sessions WHERE agent_type=? AND session_id=?",
-    ).run(agent, sessionId);
-    if (resp.changes > 0) this._onDataChanged.fire();
+    await this.ensureInitialized();
+    if (!this.db) throw new Error("Database not initialized");
+
+    try {
+      const stmt = this.db.prepare(
+        "DELETE FROM sessions WHERE agent_type=? AND session_id=?"
+      );
+      const resp = stmt.run(agent, sessionId);
+      
+      if (resp.changes > 0) this._onDataChanged.fire();
+    } catch (error) {
+      this.logger.error(`Failed to delete session: ${error}`);
+      throw error;
+    }
   }
 
   async deleteAllSessions(cwd: string): Promise<void> {
-    const resp = this.db!.prepare("DELETE FROM sessions WHERE cwd=?").run(cwd);
-    if (resp.changes > 0) this._onDataChanged.fire();
+    await this.ensureInitialized();
+    if (!this.db) throw new Error("Database not initialized");
+
+    try {
+      const stmt = this.db.prepare("DELETE FROM sessions WHERE cwd=?");
+      const resp = stmt.run(cwd);
+      if (resp.changes > 0) this._onDataChanged.fire();
+    } catch (error) {
+      this.logger.error(`Failed to delete all sessions: ${error}`);
+      throw error;
+    }
   }
 
   async hasSession(agent: string, sessionId: string): Promise<boolean> {
-    const row = this.db!.prepare(
-      "SELECT COUNT(*) AS count FROM sessions WHERE agent_type=? AND session_id=?",
-    ).get(agent, sessionId) as { count: number };
-    return row.count > 0;
+    await this.ensureInitialized();
+    if (!this.db) throw new Error("Database not initialized");
+
+    try {
+      const stmt = this.db.prepare(
+        "SELECT COUNT(*) AS count FROM sessions WHERE agent_type=? AND session_id=?"
+      );
+      const row = stmt.get(agent, sessionId) as { count: number };
+      return row.count > 0;
+    } catch (error) {
+      this.logger.error(`Failed to check session existence: ${error}`);
+      throw error;
+    }
   }
 
-  dispose(): void {
-    this.db?.close();
+  async dispose(): Promise<void> {
+    if (this.db) {
+      try {
+        this.db.close();
+      } catch (error) {
+        this.logger.error(`Failed to close database: ${error}`);
+      }
+    }
+    this.db = null;
     this._onDataChanged.dispose();
   }
 }

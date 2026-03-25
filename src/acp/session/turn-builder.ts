@@ -1,8 +1,8 @@
 import type {
-  ContentBlock,
   SessionNotification,
   ToolCall,
   ToolCallUpdate,
+  ContentBlock,
 } from "@agentclientprotocol/sdk";
 import * as vscode from "vscode";
 
@@ -24,7 +24,6 @@ export class AcpTurnBuilder {
 
   constructor(
     private readonly participantId: string,
-    _logger: vscode.LogOutputChannel,
   ) {}
 
   processNotification(notification: SessionNotification): void {
@@ -156,9 +155,10 @@ export class AcpTurnBuilder {
     if (invocationMessage) {
       part.invocationMessage = invocationMessage;
     }
-    if (update.status === "completed") {
-      part.presentation = "hiddenAfterComplete";
-    }
+    // Do NOT set presentation = "hiddenAfterComplete" in history reconstruction:
+    // the live renderer already hides completed calls during the active turn;
+    // in restored history we want to keep them visible so the conversation is
+    // fully auditable.
     this.toolCallParts.delete(update.toolCallId);
   }
 
@@ -167,7 +167,9 @@ export class AcpTurnBuilder {
   // ---------------------------------------------------------------------------
 
   private flushPendingUserMessage(): void {
-    if (!this.currentUserMessage.trim()) return;
+    const hasText = this.currentUserMessage.trim().length > 0;
+    const hasRefs = this.currentUserReferences.length > 0;
+    if (!hasText && !hasRefs) return;
     this.turns.push(
       new vscode.ChatRequestTurn2(
         this.currentUserMessage,
@@ -215,44 +217,120 @@ export class AcpTurnBuilder {
   }
 
   /**
-   * Parse a user message chunk. Tries colon-separated format first
-   * (produced by our own buildPromptBlocks), then falls back to raw text.
+   * Parse a user message chunk. Handles these formats produced by buildPromptBlocks:
+   *   "User: <text>"           — plain text message
+   *   "Reference (<id>): <value>" — file path, URI string, or JSON object
    */
   private parseUserChunk(raw: string): {
     userMessages: string;
     references: vscode.ChatPromptReference[];
   } {
-    const REF = "Reference ";
+    const REF_PREFIX = "Reference ";
 
     if (raw.startsWith("User:")) {
-      const refStart = raw.indexOf(REF);
       return {
-        userMessages: raw
-          .substring(0, refStart > 0 ? refStart : raw.length)
-          .replace(/^User:\s*/, "")
-          .trim(),
+        userMessages: raw.replace(/^User:\s*/, "").trim(),
         references: [],
       };
     }
 
-    if (raw.startsWith(REF)) {
-      const match = raw.match(/Reference\s\((.*)\):\s(.*)/);
+    if (raw.startsWith(REF_PREFIX)) {
+      // Match "Reference (<id>): <rest>" — use non-greedy on id, greedy on value
+      const match = raw.match(/^Reference \(([^)]*)\): ([\s\S]*)$/);
       if (match) {
-        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
-        const ref = match[1];
-        const fileRelative = match[2];
-        const fileUri = workspaceRoot
-          ? vscode.Uri.joinPath(workspaceRoot, ref)
-          : vscode.Uri.file(ref);
-        return {
-          userMessages: "",
-          references: [
-            { id: fileRelative, name: fileRelative, value: fileUri },
-          ],
-        };
+        const id = match[1];
+        const value = match[2].trim();
+        const ref = this.parseReferenceValue(id, value);
+        if (ref) {
+          return { userMessages: "", references: [ref] };
+        }
       }
     }
 
     return { userMessages: raw, references: [] };
+  }
+
+  /**
+   * Reconstruct a ChatPromptReference from the serialized value produced by
+   * formatReferenceValue in participant.ts.
+   *
+   * Handled cases:
+   * 1. JSON object with a "reference.fsPath" or "reference.external" field (image/media)
+   * 2. Relative or absolute file path
+   * 3. URI string (e.g. "file:///..." or other schemes)
+   */
+  private parseReferenceValue(
+    id: string,
+    value: string,
+  ): vscode.ChatPromptReference | undefined {
+    // Case 1: JSON-serialised object (e.g. image reference from formatReferenceValue)
+    if (value.startsWith("{")) {
+      try {
+        const parsed: unknown = JSON.parse(value);
+        if (parsed && typeof parsed === "object") {
+          const obj = parsed as Record<string, unknown>;
+          // Image references produced by VS Code have shape:
+          // { mimeType: string, reference: { fsPath: string, external: string, ... } }
+          const refObj = obj["reference"];
+          if (refObj && typeof refObj === "object") {
+            const refRecord = refObj as Record<string, unknown>;
+            const fsPath = refRecord["fsPath"];
+            const external = refRecord["external"];
+            const scheme = refRecord["scheme"];
+            if (typeof fsPath === "string") {
+              const uri = vscode.Uri.file(fsPath);
+              return { id, name: id, value: uri };
+            }
+            if (typeof external === "string") {
+              try {
+                const uri = vscode.Uri.parse(external, true);
+                return { id, name: id, value: uri };
+              } catch {
+                // fall through
+              }
+            }
+            if (typeof scheme === "string" && typeof refRecord["path"] === "string") {
+              try {
+                const uri = vscode.Uri.from({
+                  scheme,
+                  path: refRecord["path"] as string,
+                });
+                return { id, name: id, value: uri };
+              } catch {
+                // fall through
+              }
+            }
+          }
+          // Generic JSON object — return as a string value reference
+          return { id, name: id, value };
+        }
+      } catch {
+        // not valid JSON, fall through to path/URI handling
+      }
+    }
+
+    // Case 2: URI string (has a scheme like "file://" or "untitled://")
+    if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(value)) {
+      try {
+        const uri = vscode.Uri.parse(value, true);
+        return { id, name: id, value: uri };
+      } catch {
+        // fall through
+      }
+    }
+
+    // Case 3: file path (relative or absolute)
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (workspaceRoot) {
+      const uri = vscode.Uri.joinPath(workspaceRoot, value);
+      return { id, name: value, value: uri };
+    }
+    // No workspace — treat as absolute path
+    try {
+      const uri = vscode.Uri.file(value);
+      return { id, name: value, value: uri };
+    } catch {
+      return { id, name: value, value };
+    }
   }
 }
